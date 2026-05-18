@@ -10,6 +10,10 @@
 
 ## Version History
 
+### v1.1.1
+
+- :rocket: Update GH Action Versions
+
 ### v1.1.0
 
 - :arrow_up: MVP
