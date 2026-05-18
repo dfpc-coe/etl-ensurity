@@ -10,6 +10,10 @@
 
 ## Version History
 
+### v1.1.3
+
+- :bug: Pass in context object
+
 ### v1.1.2
 
 - :rocket: Remove Auth Checks
