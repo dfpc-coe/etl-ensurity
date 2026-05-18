@@ -3,6 +3,7 @@ import { Type } from '@sinclair/typebox';
 import type { Event } from '@tak-ps/etl';
 import { Feature } from '@tak-ps/node-cot'
 import ETL, { SchemaType, handler as internal, local, DataFlowType, InvocationType } from '@tak-ps/etl';
+import Schema from '@openaddresses/batch-schema';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars --  Fetch with an additional Response.typed(TypeBox Object) definition
 import { fetch } from '@tak-ps/etl';
@@ -12,6 +13,9 @@ import { fetch } from '@tak-ps/etl';
  * It should be a valid TypeBox object - https://github.com/sinclairzx81/typebox
  */
 const InputSchema = Type.Object({
+    APIKey: Type.String({
+        description: 'API key for webhook permissions'
+    }),
     'DEBUG': Type.Boolean({
         default: false,
         description: 'Print results in logs'
@@ -25,9 +29,9 @@ const InputSchema = Type.Object({
 const OutputSchema = Type.Object({})
 
 export default class Task extends ETL {
-    static name = 'default'
+    static name = 'etl-ensurity'
     static flow = [ DataFlowType.Incoming ];
-    static invocation = [ InvocationType.Schedule ];
+    static invocation = [ InvocationType.Schedule, InvocationType.Webhook ];
 
     async schema(
         type: SchemaType = SchemaType.Input,
@@ -60,6 +64,42 @@ export default class Task extends ETL {
         }
 
         await this.submit(fc);
+    }
+
+    static async webhooks(
+        schema: Schema,
+        task: Task
+    ): Promise<void> {
+        const env = await task.env(InputSchema);
+
+        schema.post('/:webhookid', {
+            name: 'Incoming Webhook',
+            group: 'Default',
+            description: 'Ensurity vehicle data webhook',
+            params: Type.Object({
+                webhookid: Type.String()
+            }),
+            body: Type.Any(),
+            res: Type.Object({
+                status: Type.Number(),
+                message: Type.String()
+            })
+        }, async (req, res) => {
+            if (!req.headers.authorization || req.headers.authorization.split(' ')[1] !== env.APIKey) {
+                return res.status(401).json({
+                    status: 401,
+                    message: 'Unauthorized'
+                });
+            }
+
+            console.log(`Ensurity webhook ${req.params.webhookid}`);
+            console.log(JSON.stringify(req.body, null, 4));
+
+            return res.json({
+                status: 200,
+                message: 'Webhook payload received'
+            });
+        });
     }
 }
 

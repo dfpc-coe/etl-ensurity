@@ -1,45 +1,20 @@
-<h1 align='center'>ETL-Template</h1>
+<h1 align='center'>ETL-Ensurity</h1>
 
-<p align='center'>Template Repository for creating new ETLs</p>
+<p align='center'>Pull vehicle data from Ensurity Mobile into the ETL platform.</p>
 
-## Development
+This ETL is intended to receive webhook payloads from [Ensurity Mobile](https://ensuritymobile.com/) so we can inspect the incoming vehicle data and shape the downstream transform. For now, the webhook accepts any payload and writes the body to the logs unchanged.
 
-DFPC provided Lambda ETLs are currently all written in [NodeJS](https://nodejs.org/en) through the use of a AWS Lambda optimized
-Docker container. Documentation for the Dockerfile can be found in the [AWS Help Center](https://docs.aws.amazon.com/lambda/latest/dg/images-create.html)
-
-```sh
-npm install
-```
-
-Add a .env file in the root directory that gives the ETL script the necessary variables to communicate with a local ETL server.
-When the ETL is deployed the `ETL_API` and `ETL_LAYER` variables will be provided by the Lambda Environment
+For local development, install dependencies with `npm install` and add a `.env` file with the ETL server connection values. In deployed environments, `ETL_API` and `ETL_LAYER` are provided by Lambda.
 
 ```json
 {
     "ETL_API": "http://localhost:5001",
-    "ETL_LAYER": "19"
+    "ETL_LAYER": "19",
+    "APIKey": "replace-with-webhook-key"
 }
 ```
 
-To run the task, ensure the local [CloudTAK](https://github.com/dfpc-coe/CloudTAK/) server is running and then run with typescript runtime
-or build to JS and run natively with node
+Run the task with `ts-node task.ts`, or build first and run the compiled output with `npm run build` followed by `node dist/task.js`.
 
-```
-ts-node task.ts
-```
-
-```
-npm run build
-cp .env dist/
-node dist/task.js
-```
-
-### Deployment
-
-Deployment into the CloudTAK environment for configuration is done via automatic releases to the DFPC AWS environment.
-
-Github actions will build and push docker releases on every version tag which can then be automatically configured via the 
-CloudTAK API.
-
-Non-DFPC users will need to setup their own docker => ECS build system via something like Github Actions or AWS Codebuild.
+Deployment follows the same release flow as the other DFPC ETLs: GitHub Actions builds the container image on version tags, and CloudTAK handles configuration in AWS.
 
