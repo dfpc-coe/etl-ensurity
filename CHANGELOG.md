@@ -10,6 +10,10 @@
 
 ## Version History
 
+### v1.1.2
+
+- :rocket: Remove Auth Checks
+
 ### v1.1.1
 
 - :rocket: Update GH Action Versions

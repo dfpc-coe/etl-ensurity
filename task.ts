@@ -13,9 +13,6 @@ import { fetch } from '@tak-ps/etl';
  * It should be a valid TypeBox object - https://github.com/sinclairzx81/typebox
  */
 const InputSchema = Type.Object({
-    APIKey: Type.String({
-        description: 'API key for webhook permissions'
-    }),
     'DEBUG': Type.Boolean({
         default: false,
         description: 'Print results in logs'
@@ -85,13 +82,6 @@ export default class Task extends ETL {
                 message: Type.String()
             })
         }, async (req, res) => {
-            if (!req.headers.authorization || req.headers.authorization.split(' ')[1] !== env.APIKey) {
-                return res.status(401).json({
-                    status: 401,
-                    message: 'Unauthorized'
-                });
-            }
-
             console.log(`Ensurity webhook ${req.params.webhookid}`);
             console.log(JSON.stringify(req.body, null, 4));
 
