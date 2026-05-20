@@ -46,9 +46,6 @@ export default class Task extends ETL {
     }
 
     async control(): Promise<void> {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Get the Environment from the Server and ensure it conforms to the schema
-        const env = await this.env(InputSchema);
-
         const features: Static<typeof Feature.InputFeature>[] = [];
 
         // Get things here and convert them to GeoJSON Feature Collections
@@ -65,10 +62,8 @@ export default class Task extends ETL {
 
     static async webhooks(
         schema: Schema,
-        task: Task
+        //task: Task
     ): Promise<void> {
-        const env = await task.env(InputSchema);
-
         schema.post('/:webhookid', {
             name: 'Incoming Webhook',
             group: 'Default',
