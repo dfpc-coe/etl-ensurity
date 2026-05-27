@@ -10,6 +10,10 @@
 
 ## Version History
 
+### v1.1.4
+
+- :arrow_up: Update Core Deps
+
 ### v1.1.3
 
 - :bug: Pass in context object
