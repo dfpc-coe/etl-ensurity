@@ -25,6 +25,17 @@ const InputSchema = Type.Object({
  */
 const OutputSchema = Type.Object({})
 
+const WebhookBody = Type.Object({
+    'serial number': Type.String({ description: 'Device serial number, used as the feature callsign and UID' }),
+    'date/time': Type.String({ description: 'Event timestamp in "YYYY-MM-DD HH:mm:ss" format' }),
+    'Latitude': Type.Number(),
+    'Longitude': Type.Number(),
+    'Event': Type.String({ description: 'Event code' }),
+    'solar power': Type.String({ description: 'Solar power reading' }),
+    'Speed': Type.String({ description: 'Speed in knots' }),
+    'Heading': Type.Number({ description: 'Heading in degrees' }),
+});
+
 export default class Task extends ETL {
     static name = 'etl-ensurity'
     static flow = [ DataFlowType.Incoming ];
@@ -62,7 +73,7 @@ export default class Task extends ETL {
 
     static async webhooks(
         schema: Schema,
-        //task: Task
+        task: Task
     ): Promise<void> {
         schema.post('/:webhookid', {
             name: 'Incoming Webhook',
@@ -71,14 +82,51 @@ export default class Task extends ETL {
             params: Type.Object({
                 webhookid: Type.String()
             }),
-            body: Type.Any(),
+            body: WebhookBody,
             res: Type.Object({
                 status: Type.Number(),
                 message: Type.String()
             })
         }, async (req, res) => {
-            console.log(`Ensurity webhook ${req.params.webhookid}`);
-            console.log(JSON.stringify(req.body, null, 4));
+            const body = req.body as Static<typeof WebhookBody>;
+
+            const time = new Date(body['date/time'].replace(' ', 'T') + 'Z');
+            const stale = new Date(time.getTime() + 5 * 60 * 1000);
+            const timeISO = time.toISOString();
+            const staleISO = stale.toISOString();
+
+            const feature: Static<typeof Feature.InputFeature> = {
+                id: body['serial number'],
+                type: 'Feature',
+                properties: {
+                    callsign: body['serial number'],
+                    type: 'a-f-G-U-C',
+                    how: 'm-g',
+                    time: timeISO,
+                    start: timeISO,
+                    stale: staleISO,
+                    center: [body['Longitude'], body['Latitude'], 0],
+                    track: {
+                        course: String(body['Heading']),
+                        speed: body['Speed'],
+                    },
+                    metadata: {
+                        event: body['Event'],
+                        solarPower: body['solar power'],
+                    },
+                },
+                geometry: {
+                    type: 'Point',
+                    coordinates: [body['Longitude'], body['Latitude'], 0],
+                },
+            };
+
+            const fc: Static<typeof Feature.InputFeatureCollection> = {
+                type: 'FeatureCollection',
+                features: [feature],
+            };
+
+            await task.submit(fc);
 
             return res.json({
                 status: 200,
