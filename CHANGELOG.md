@@ -10,6 +10,10 @@
 
 ## Version History
 
+### v1.2.0
+
+- :rocket: Submit features to API
+
 ### v1.1.4
 
 - :arrow_up: Update Core Deps
