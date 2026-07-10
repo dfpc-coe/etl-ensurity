@@ -5,13 +5,6 @@ import { Feature } from '@tak-ps/node-cot'
 import ETL, { SchemaType, handler as internal, local, DataFlowType, InvocationType } from '@tak-ps/etl';
 import Schema from '@openaddresses/batch-schema';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars --  Fetch with an additional Response.typed(TypeBox Object) definition
-import { fetch } from '@tak-ps/etl';
-
-/**
- * The Input Schema contains the environment object that will be requested via the CloudTAK UI
- * It should be a valid TypeBox object - https://github.com/sinclairzx81/typebox
- */
 const InputSchema = Type.Object({
     'DEBUG': Type.Boolean({
         default: false,
@@ -57,18 +50,48 @@ export default class Task extends ETL {
     }
 
     async control(): Promise<void> {
-        const features: Static<typeof Feature.InputFeature>[] = [];
-
-        // Get things here and convert them to GeoJSON Feature Collections
-        // That conform to the node-cot Feature properties spec
-        // https://github.com/dfpc-coe/node-CoT/
+        const layer = await this.fetchLayer();
+        const now = new Date();
 
         const fc: Static<typeof Feature.InputFeatureCollection> = {
             type: 'FeatureCollection',
-            features: features
+            features: []
+        };
+
+        const limit = 100;
+        let page = 0;
+        let total = Infinity;
+
+        while (fc.features.length < total) {
+            const url = new URL(`/api/connection/${layer.connection}/feature`, this.etl.api);
+            url.searchParams.set('layer', String(layer.id));
+            url.searchParams.set('format', 'geojson');
+            url.searchParams.set('download', 'false');
+            url.searchParams.set('limit', String(limit));
+            url.searchParams.set('page', String(page));
+            url.searchParams.set('sort', 'id');
+            url.searchParams.set('order', 'asc');
+            url.searchParams.set('filter', '');
+
+            const res = await this.fetch(url) as { total: number; items: Static<typeof Feature.InputFeatureCollection>['features'] };
+
+            total = res.total;
+
+            for (const feat of res.items) {
+                const stale = feat.properties?.stale ? new Date(feat.properties.stale as string) : null;
+                if (stale && !Number.isNaN(stale.getTime()) && stale < now) continue;
+
+                feat.properties.archived = false;
+                fc.features.push(feat);
+            }
+
+            if (res.items.length < limit) break;
+            page++;
         }
 
-        await this.submit(fc);
+        await this.submit(fc, {
+            archive: false
+        });
     }
 
     static async webhooks(

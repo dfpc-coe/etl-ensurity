@@ -10,6 +10,10 @@
 
 ## Version History
 
+### v1.5.0
+
+- :rocket: Resubmission Support
+
 ### v1.4.0
 
 - :arrow_up: Update Runtime to Node24
