@@ -6,6 +6,13 @@ import ETL, { SchemaType, handler as internal, local, DataFlowType, InvocationTy
 import Schema from '@openaddresses/batch-schema';
 
 const InputSchema = Type.Object({
+    UnitCallsigns: Type.Array(Type.Object({
+        UnitID: Type.String({ description: 'Serial number of the unit' }),
+        Callsign: Type.String({ description: 'Display callsign for this unit' })
+    }), {
+        default: [],
+        description: 'Optional callsign overrides keyed by serial number'
+    }),
     'DEBUG': Type.Boolean({
         default: false,
         description: 'Print results in logs'
@@ -111,6 +118,7 @@ export default class Task extends ETL {
                 message: Type.String()
             })
         }, async (req, res) => {
+            const env = await task.env(InputSchema);
             const body = req.body as Static<typeof WebhookBody>;
 
             const time = new Date(body['date/time'].replace(' ', 'T') + 'Z');
@@ -118,12 +126,15 @@ export default class Task extends ETL {
             const timeISO = time.toISOString();
             const staleISO = stale.toISOString();
 
+            const override = env.UnitCallsigns.find((u) => u.UnitID === body['serial number']);
+            const callsign = override ? override.Callsign : body['serial number'];
+
             const feature: Static<typeof Feature.InputFeature> = {
                 id: body['serial number'],
                 type: 'Feature',
                 properties: {
-                    callsign: body['serial number'],
-                    type: 'a-f-G-U-C',
+                    callsign,
+                    type: 'a-h-G',
                     how: 'm-g',
                     time: timeISO,
                     start: timeISO,
