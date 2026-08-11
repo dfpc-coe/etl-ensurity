@@ -10,6 +10,11 @@
 
 ## Version History
 
+### v1.7.0
+
+- :rocket: Add Capabilities document
+- :arrow_up: Update GH Actions
+
 ### v1.6.0
 
 - :rocket: Add support for user provided callsigns
