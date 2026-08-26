@@ -86,8 +86,6 @@ export default class Task extends ETL {
                 items: Static<typeof Feature.InputFeatureCollection>['features']
             };
 
-            if (env.DEBUG) console.log(JSON.stringify(res, null, 2));
-
             total = res.total;
 
             for (const feat of res.items) {
@@ -118,13 +116,16 @@ export default class Task extends ETL {
             params: Type.Object({
                 webhookid: Type.String()
             }),
-            body: WebhookBody,
+            body: Type.Any(),
             res: Type.Object({
                 status: Type.Number(),
                 message: Type.String()
             })
         }, async (req, res) => {
             const env = await task.env(InputSchema);
+
+            console.error(req.body);
+
             const body = req.body as Static<typeof WebhookBody>;
 
             const time = new Date(body['date/time'].replace(' ', 'T') + 'Z');

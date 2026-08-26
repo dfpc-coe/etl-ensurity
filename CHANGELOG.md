@@ -10,6 +10,10 @@
 
 ## Version History
 
+### v1.7.2
+
+- :rocket: temp build for webhook payload changes
+
 ### v1.7.1
 
 - :rocket: Add DEBUG output
