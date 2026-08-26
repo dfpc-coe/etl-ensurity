@@ -10,6 +10,10 @@
 
 ## Version History
 
+### v1.8.0
+
+- :tada: Support new WebHook Payload which includes default tracker name
+
 ### v1.7.2
 
 - :rocket: temp build for webhook payload changes

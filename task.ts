@@ -6,35 +6,36 @@ import ETL, { SchemaType, handler as internal, local, DataFlowType, InvocationTy
 import Schema from '@openaddresses/batch-schema';
 
 const InputSchema = Type.Object({
-    UnitCallsigns: Type.Array(Type.Object({
-        UnitID: Type.String({ description: 'Serial number of the unit' }),
-        Callsign: Type.String({ description: 'Display callsign for this unit' })
-    }), {
-        default: [],
-        description: 'Optional callsign overrides keyed by serial number'
-    }),
     'DEBUG': Type.Boolean({
         default: false,
         description: 'Print results in logs'
     })
 });
 
-/**
- * The Output Schema contains the known properties that will be returned on the
- * GeoJSON Feature in the .properties.metdata object
- */
-const OutputSchema = Type.Object({})
-
 const WebhookBody = Type.Object({
-    'serial number': Type.String({ description: 'Device serial number, used as the feature callsign and UID' }),
+    'serial number': Type.Union([Type.Number(), Type.String()], { description: 'Device serial number, used as the feature UID' }),
+    'imei': Type.Optional(Type.String({ description: 'Device IMEI' })),
     'date/time': Type.String({ description: 'Event timestamp in "YYYY-MM-DD HH:mm:ss" format' }),
     'Latitude': Type.Number(),
     'Longitude': Type.Number(),
-    'Event': Type.String({ description: 'Event code' }),
-    'solar power': Type.String({ description: 'Solar power reading' }),
-    'Speed': Type.String({ description: 'Speed in knots' }),
+    'Event': Type.Union([Type.Number(), Type.String()], { description: 'Event code' }),
+    'solar power': Type.Union([Type.Number(), Type.String()], { description: 'Solar power reading' }),
+    'Speed': Type.Union([Type.Number(), Type.String()], { description: 'Speed in knots' }),
     'Heading': Type.Number({ description: 'Heading in degrees' }),
+    'in1': Type.Optional(Type.Boolean()),
+    'in2': Type.Optional(Type.Boolean()),
+    'in3': Type.Optional(Type.Boolean()),
+    'in4': Type.Optional(Type.Boolean()),
+    'in5': Type.Optional(Type.Boolean()),
+    'in6': Type.Optional(Type.Boolean()),
+    'magnetAbsent': Type.Optional(Type.Boolean()),
+    'name': Type.Optional(Type.String({ description: 'Device name, used as the default callsign' })),
 });
+
+/**
+ * Metadata written to each feature; mirrors the raw webhook body field names
+ */
+const OutputSchema = Type.Omit(WebhookBody, ['serial number', 'date/time', 'Latitude', 'Longitude', 'Speed', 'Heading']);
 
 export default class Task extends ETL {
     static name = 'etl-ensurity'
@@ -122,8 +123,6 @@ export default class Task extends ETL {
                 message: Type.String()
             })
         }, async (req, res) => {
-            const env = await task.env(InputSchema);
-
             console.error(req.body);
 
             const body = req.body as Static<typeof WebhookBody>;
@@ -133,11 +132,11 @@ export default class Task extends ETL {
             const timeISO = time.toISOString();
             const staleISO = stale.toISOString();
 
-            const override = env.UnitCallsigns.find((u) => u.UnitID === body['serial number']);
-            const callsign = override ? override.Callsign : body['serial number'];
+            const serial = String(body['serial number']);
+            const callsign = body.name || serial;
 
             const feature: Static<typeof Feature.InputFeature> = {
-                id: body['serial number'],
+                id: serial,
                 type: 'Feature',
                 properties: {
                     callsign,
@@ -149,11 +148,20 @@ export default class Task extends ETL {
                     center: [body['Longitude'], body['Latitude'], 0],
                     track: {
                         course: String(body['Heading']),
-                        speed: body['Speed'],
+                        speed: String(body['Speed']),
                     },
                     metadata: {
-                        event: body['Event'],
-                        solarPower: body['solar power'],
+                        name: body.name,
+                        imei: body.imei,
+                        Event: body.Event,
+                        'solar power': body['solar power'],
+                        in1: body.in1,
+                        in2: body.in2,
+                        in3: body.in3,
+                        in4: body.in4,
+                        in5: body.in5,
+                        in6: body.in6,
+                        magnetAbsent: body.magnetAbsent,
                     },
                 },
                 geometry: {
