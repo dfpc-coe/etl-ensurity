@@ -10,6 +10,10 @@
 
 ## Version History
 
+### v1.7.1
+
+- :rocket: Add DEBUG output
+
 ### v1.7.0
 
 - :rocket: Add Capabilities document

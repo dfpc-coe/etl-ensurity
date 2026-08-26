@@ -80,7 +80,12 @@ export default class Task extends ETL {
             url.searchParams.set('order', 'asc');
             url.searchParams.set('filter', '');
 
-            const res = await this.fetch(url) as { total: number; items: Static<typeof Feature.InputFeatureCollection>['features'] };
+            const res = await this.fetch(url) as {
+                total: number;
+                items: Static<typeof Feature.InputFeatureCollection>['features']
+            };
+
+            if (env.DEBUG) console.log(JSON.stringify(res, null, 2));
 
             total = res.total;
 
