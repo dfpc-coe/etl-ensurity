@@ -58,6 +58,7 @@ export default class Task extends ETL {
 
     async control(): Promise<void> {
         const layer = await this.fetchLayer();
+        const env = await this.env(InputSchema);
         const now = new Date();
 
         const fc: Static<typeof Feature.InputFeatureCollection> = {
