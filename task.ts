@@ -101,6 +101,10 @@ export default class Task extends ETL {
             page++;
         }
 
+        if (env.DEBUG) {
+            console.log(JSON.stringify(fc, null, 2));
+        }
+
         await this.submit(fc, {
             archive: false
         });
