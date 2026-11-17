@@ -37,6 +37,32 @@ const WebhookBody = Type.Object({
  */
 const OutputSchema = Type.Omit(WebhookBody, ['serial number', 'date/time', 'Latitude', 'Longitude', 'Speed', 'Heading']);
 
+type InputFeature = Static<typeof Feature.InputFeature>;
+
+function isObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+}
+
+function isFeature(value: unknown): value is InputFeature {
+    return isObject(value)
+        && value.type === 'Feature'
+        && isObject(value.properties)
+        && isObject(value.geometry);
+}
+
+function isFeatureList(value: unknown): value is { total: number; items: InputFeature[] } {
+    return isObject(value)
+        && typeof value.total === 'number'
+        && Array.isArray(value.items)
+        && value.items.every(isFeature);
+}
+
+function stringify(value: unknown): string {
+    if (typeof value === 'string') return value;
+    if (typeof value === 'object' && value !== null) return JSON.stringify(value);
+    return String(value);
+}
+
 export default class Task extends ETL {
     static name = 'etl-ensurity'
     static flow = [ DataFlowType.Incoming ];
@@ -46,15 +72,9 @@ export default class Task extends ETL {
         type: SchemaType = SchemaType.Input,
         flow: DataFlowType = DataFlowType.Incoming
     ): Promise<TSchema> {
-        if (flow === DataFlowType.Incoming) {
-            if (type === SchemaType.Input) {
-                return InputSchema;
-            } else {
-                return OutputSchema;
-            }
-        } else {
-            return Type.Object({});
-        }
+        if (flow !== DataFlowType.Incoming) return Type.Object({});
+
+        return type === SchemaType.Input ? InputSchema : OutputSchema;
     }
 
     async control(): Promise<void> {
@@ -82,15 +102,14 @@ export default class Task extends ETL {
             url.searchParams.set('order', 'asc');
             url.searchParams.set('filter', '');
 
-            const res = await this.fetch(url) as {
-                total: number;
-                items: Static<typeof Feature.InputFeatureCollection>['features']
-            };
+            const res: unknown = await this.fetch(url);
+            if (!isFeatureList(res)) throw new Error('Unexpected Feature List response');
 
             total = res.total;
 
             for (const feat of res.items) {
-                const stale = feat.properties?.stale ? new Date(feat.properties.stale as string) : null;
+                const staleValue = feat.properties.stale;
+                const stale = staleValue === undefined || staleValue === '' || staleValue === 0 ? null : new Date(staleValue);
                 if (stale && !Number.isNaN(stale.getTime()) && stale < now) continue;
 
                 feat.properties.archived = false;
@@ -114,7 +133,7 @@ export default class Task extends ETL {
         schema: Schema,
         task: ETL
     ): Promise<void> {
-        schema.post('/:webhookid', {
+        await schema.post('/:webhookid', {
             name: 'Incoming Webhook',
             group: 'Default',
             description: 'Ensurity vehicle data webhook',
@@ -126,71 +145,96 @@ export default class Task extends ETL {
                 status: Type.Number(),
                 message: Type.String()
             })
-        }, async (req, res) => {
-            console.error(req.body);
+        }, (req, res, next) => {
+            const body: unknown = req.body;
 
-            const body = req.body as Static<typeof WebhookBody>;
+            console.error(body);
 
-            const time = new Date(body['date/time'].replace(' ', 'T') + 'Z');
-            const stale = new Date(time.getTime() + 5 * 60 * 1000);
-            const timeISO = time.toISOString();
-            const staleISO = stale.toISOString();
+            const receive = async (): Promise<void> => {
+                try {
+                    await Task.receive(task, body);
 
-            const serial = String(body['serial number']);
-            const callsign = body.name || serial;
-
-            const feature: Static<typeof Feature.InputFeature> = {
-                id: serial,
-                type: 'Feature',
-                properties: {
-                    callsign,
-                    type: 'a-h-G',
-                    how: 'm-g',
-                    time: timeISO,
-                    start: timeISO,
-                    stale: staleISO,
-                    center: [body['Longitude'], body['Latitude'], 0],
-                    track: {
-                        course: String(body['Heading']),
-                        speed: String(body['Speed']),
-                    },
-                    metadata: {
-                        name: body.name,
-                        imei: body.imei,
-                        Event: body.Event,
-                        'solar power': body['solar power'],
-                        in1: body.in1,
-                        in2: body.in2,
-                        in3: body.in3,
-                        in4: body.in4,
-                        in5: body.in5,
-                        in6: body.in6,
-                        magnetAbsent: body.magnetAbsent,
-                    },
-                },
-                geometry: {
-                    type: 'Point',
-                    coordinates: [body['Longitude'], body['Latitude'], 0],
-                },
+                    res.json({
+                        status: 200,
+                        message: 'Webhook payload received'
+                    });
+                } catch (err) {
+                    next(err);
+                }
             };
 
-            const fc: Static<typeof Feature.InputFeatureCollection> = {
-                type: 'FeatureCollection',
-                features: [feature],
-            };
-
-            await task.submit(fc);
-
-            return res.json({
-                status: 200,
-                message: 'Webhook payload received'
-            });
+            void receive();
         });
+    }
+
+    static async receive(
+        task: ETL,
+        body: unknown
+    ): Promise<void> {
+        if (!isObject(body)) throw new TypeError('Webhook payload is not an object');
+
+        const datetime = body['date/time'];
+        if (typeof datetime !== 'string') throw new TypeError('Webhook payload is missing date/time');
+
+        const { Longitude, Latitude } = body;
+        if (typeof Longitude !== 'number' || typeof Latitude !== 'number') {
+            throw new TypeError('Webhook payload is missing Longitude/Latitude');
+        }
+
+        const time = new Date(datetime.replace(' ', 'T') + 'Z');
+        const stale = new Date(time.getTime() + 5 * 60 * 1000);
+        const timeISO = time.toISOString();
+        const staleISO = stale.toISOString();
+
+        const serial = stringify(body['serial number']);
+        const callsign = (typeof body.name === 'string' && body.name) || serial;
+
+        const feature: InputFeature = {
+            id: serial,
+            type: 'Feature',
+            properties: {
+                callsign,
+                type: 'a-h-G',
+                how: 'm-g',
+                time: timeISO,
+                start: timeISO,
+                stale: staleISO,
+                center: [Longitude, Latitude, 0],
+                track: {
+                    course: stringify(body.Heading),
+                    speed: stringify(body.Speed),
+                },
+                metadata: {
+                    name: body.name,
+                    imei: body.imei,
+                    Event: body.Event,
+                    'solar power': body['solar power'],
+                    in1: body.in1,
+                    in2: body.in2,
+                    in3: body.in3,
+                    in4: body.in4,
+                    in5: body.in5,
+                    in6: body.in6,
+                    magnetAbsent: body.magnetAbsent,
+                },
+            },
+            geometry: {
+                type: 'Point',
+                coordinates: [Longitude, Latitude, 0],
+            },
+        };
+
+        const fc: Static<typeof Feature.InputFeatureCollection> = {
+            type: 'FeatureCollection',
+            features: [feature],
+        };
+
+        await task.submit(fc);
     }
 }
 
 await local(await Task.init(import.meta.url), import.meta.url);
-export async function handler(event: Event = {}, context?: object) {
-    return await internal(new Task(import.meta.url), event, context);
+export async function handler(event: Event = {}, context?: object): ReturnType<typeof internal> {
+    return internal(new Task(import.meta.url), event, context);
 }
 
